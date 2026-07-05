@@ -57,6 +57,11 @@ That companion firmware version:
   - Supports both native FF protocol and HD44780-compatible LCD emulation.
   - Runtime enable/disable and protocol switching are available from OSD and serial menus.
   - See [FF OSD Guide](docs/FF_OSD_GUIDE.md) for wiring and configuration details.
+- **Hardware Configuration (LEO V2 / LEO V3):**
+  - ROM bank selection (1–8) — on LEO V3, value applied on next RESET (F12); on LEO V2 (no keyboard), applied only after a full power cycle.
+  - RAM size toggle (128 KB / 1024 KB) — applied immediately via GPIO.
+  - Gotek drive selector (OFF / A / B) — applied immediately via GPIO.
+  - Configured via OSD **HARDWARE CONFIG** submenu; saved to flash with SAVE.
 - **Configuration via Serial Terminal:**
   - Alternative text-based menu system for headless configuration.
   - Frequency presets for self-synchronizing capture mode (ZX Spectrum 48K/128K pixel clocks).
@@ -135,17 +140,20 @@ That companion firmware version:
 2. **Select the board environment**  
    Open `platformio.ini` and uncomment the desired board in `default_envs`. Each board environment automatically includes the correct feature flags, pin mappings, and source filters:
 
-   | Environment     | OSD Menu | FF OSD | PS/2 Kbd | USB Kbd | Serial¹ | VGA/DVI Auto | Notes                                  |
-   |-----------------|:--------:|:------:|:--------:|:-------:|:-------:|:------------:|----------------------------------------|
-   | `36LJU22`       | ✓        | ✓      |          |         | ✓       | ✓            |                                        |
-   | `RP2040_ZERO`   | ✓        | ✓      |          |         | ✓       | ✓            | WS2812 LED                             |
-   | `38LJE24`       | ✓        | ✓      | ✓        | ✓       |         | ✓            | DVI pins reversed, VGA R/B swapped     |
-   | `11XGA24_1`     | ✓        |        |          |         | ✓       |              | No I2C, no FF OSD                      |
-   | `11XGA24_2`     | ✓        |        |          |         | ✓       |              | No I2C, no FF OSD (alt pin config)     |
-   | `LEO_V2`        | ✓        | ✓      |          |         | ✓       | ✓            | WS2812 LED                             |
-   | `LEO_V3`        | ✓        | ✓      | ✓        | ✓       |         | ✓            | SPI keyboard (EPM3256), WS2812 LED     |
-   | `LEO_V3_2040BT` | ✓        | ✓      | ✓        | ✓       |         | ✓            | SPI keyboard (EPM3256)                 |
-   | `09LJV23`       | ✓        | ✓      |          |         | ✓       | ✓            |                                        |
+   | Environment     | OSD Menu | FF OSD | PS/2 Kbd | USB Kbd | Serial¹ | VGA/DVI Auto | Notes                                                |
+   |-----------------|:--------:|:------:|:--------:|:-------:|:-------:|:------------:|------------------------------------------------------|
+   | `36LJU22`       | ✓        | ✓      |          |         | ✓       | ✓            |                                                      |
+   | `RP2040_ZERO`   | ✓        | ✓      |          |         | ✓       | ✓            | WS2812 LED                                           |
+   | `38LJE24`       | ✓        | ✓      | ✓        | ✓       |         | ✓            | DVI pins reversed, VGA R/B swapped                   |
+   | `38LJE24-PICO2` | ✓        | ✓      | ✓        | ✓       |         | ✓            | DVI pins reversed, VGA R/B swapped; Pico 2 (RP2350)  |
+   | `38LJU24`       | ✓        | ✓      |          |         | ✓       | ✓            | DVI pins reversed, VGA R/B swapped                   |
+   | `38LJU24-PICO2` | ✓        | ✓      |          |         | ✓       | ✓            | DVI pins reversed, VGA R/B swapped; Pico 2 (RP2350)  |
+   | `11XGA24_1`     | ✓        |        |          |         | ✓       |              | No I2C, no FF OSD                                    |
+   | `11XGA24_2`     | ✓        |        |          |         | ✓       |              | No I2C, no FF OSD (alt pin config)                   |
+   | `LEO_V2`        | ✓        | ✓      |          |         | ✓       | ✓            | WS2812 LED, HW Config (no kbd)                       |
+   | `LEO_V3`        | ✓        | ✓      | ✓        | ✓       |         | ✓            | SPI keyboard (EPM3256), WS2812 LED                   |
+   | `LEO_V3_2040BT` | ✓        | ✓      | ✓        | ✓       |         | ✓            | SPI keyboard (EPM3256)                               |
+   | `09LJV23`       | ✓        | ✓      |          |         | ✓       | ✓            |                                                      |
 
    ¹ Serial menu (`SERIAL_MENU_ENABLE` + `PICO_STDIO_USB`) is controlled via the `[env_serial]` section. Boards with keyboard support use USB Host mode by default; enable serial by editing the `[env_usb_kbd]` section.
 
@@ -155,6 +163,9 @@ That companion firmware version:
      36LJU22
      ; RP2040_ZERO
      ; 38LJE24
+     ; 38LJE24-PICO2
+     ; 38LJU24
+     ; 38LJU24-PICO2
      ; 11XGA24_1
      ; 11XGA24_2
      ; LEO_V2
