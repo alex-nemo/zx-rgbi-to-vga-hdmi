@@ -2,6 +2,7 @@
 #include "hardware/dma.h"
 #include "hardware/irq.h"
 #include "hardware/watchdog.h"
+#include "hardware/structs/bus_ctrl.h"
 
 #include "g_config.h"
 #include "dvi.h"
@@ -29,13 +30,12 @@ static uint32_t *v_out_dma_buf_alloc; // single contiguous allocation for both p
 static uint32_t *v_out_sync_hblank;   // pre-filled H-blank line (NO_SYNC + H_SYNC + NO_SYNC)
 static uint32_t *v_out_sync_vsync;    // pre-filled V-sync line (V_SYNC + VH_SYNC + V_SYNC)
 
-static uint32_t pixels[256];
-
 // ISR state (file-scope for reset in stop_dvi)
 static uint16_t y = 0;
 static uint8_t *scr_buffer = NULL;
 static uint32_t active_buf_idx = 0;
 
+static uint32_t pixels[256];
 // 4KB-aligned palette: 20 entries × 16 bytes (4 × uint32_t each)
 // Each entry: {normal_lo, normal_hi, inverted_lo, inverted_hi}
 // Entries 0-15: colors, 16-19: sync patterns
@@ -49,10 +49,6 @@ static const uint8_t VH_SYNC = 19;
 static uint64_t get_ser_diff_data(uint16_t dataR, uint16_t dataG, uint16_t dataB)
 {
   uint64_t out64 = 0;
-  uint8_t d6;
-  uint8_t bR;
-  uint8_t bG;
-  uint8_t bB;
 
   for (int bit = 9; bit >= 0; bit--)
   {
@@ -61,25 +57,23 @@ static uint64_t get_ser_diff_data(uint16_t dataR, uint16_t dataG, uint16_t dataB
     if (bit == 4)
       out64 <<= 2;
 
-    bR = (dataR >> bit) & 1;
-    bG = (dataG >> bit) & 1;
-    bB = (dataB >> bit) & 1;
+    uint8_t bR = (dataR >> bit) & 1;
+    uint8_t bG = (dataG >> bit) & 1;
+    uint8_t bB = (dataB >> bit) & 1;
 
 #ifndef DVI_PINS_REVERSED
     bR = 2 - bR;
     bG = 2 - bG;
     bB = 2 - bB;
 
-    d6 = (bB << 4) | (bG << 2) | (bR << 0);
+    out64 |= (bB << 4) | (bG << 2) | (bR << 0);
 #else
     bR = bR + 1;
     bG = bG + 1;
     bB = bB + 1;
 
-    d6 = (bR << 4) | (bG << 2) | (bB << 0);
+    out64 |= (bR << 4) | (bG << 2) | (bB << 0);
 #endif
-
-    out64 |= d6;
   }
 
   return out64;
@@ -89,13 +83,11 @@ static uint64_t get_ser_diff_data(uint16_t dataR, uint16_t dataG, uint16_t dataB
 static uint tmds_encoder(uint8_t d8)
 {
   int s1 = 0;
-  uint8_t xnor = 0;
 
   for (int i = 0; i < 8; i++)
     s1 += (d8 & (1u << i)) ? 1 : 0;
 
-  if ((s1 > 4) || ((s1 == 4) && ((d8 & 1) == 0)))
-    xnor = 1;
+  uint8_t xnor = ((s1 > 4) || ((s1 == 4) && ((d8 & 1) == 0))) ? 1 : 0;
 
   uint16_t d_out = d8 & 1;
   uint16_t qi = d_out;
@@ -106,11 +98,7 @@ static uint tmds_encoder(uint8_t d8)
     qi = d_out & (1u << i);
   }
 
-  if (xnor == 1)
-    d_out |= 1u << 9;
-  else
-    d_out |= 1u << 8;
-
+  d_out |= xnor ? (1u << 9) : (1u << 8);
   return d_out;
 }
 
@@ -119,12 +107,13 @@ static void pio_set_x(PIO pio, int sm, uint32_t v)
 {
   uint instr_shift = pio_encode_in(pio_x, 4);
   uint instr_mov = pio_encode_mov(pio_x, pio_isr);
+
   for (int i = 0; i < 8; i++)
   {
-    const uint32_t nibble = (v >> (i * 4)) & 0xf;
-    pio_sm_exec(pio, sm, pio_encode_set(pio_x, nibble));
+    pio_sm_exec(pio, sm, pio_encode_set(pio_x, (v >> (i * 4)) & 0xf));
     pio_sm_exec(pio, sm, instr_shift);
   }
+
   pio_sm_exec(pio, sm, instr_mov);
 }
 
@@ -261,21 +250,17 @@ void start_dvi()
 
   // pixels[] lookup: each input byte (2 packed 4-bit pixels) → 2 palette indices
   // byte order (LSB first): p1_color, p2_color (each palette entry has norm+inv)
+  // pixels[]: byte (2 packed 4-bit pixels) → 2 palette indices
   for (int i = 0; i < 256; i++)
-  {
-    uint8_t p1 = i & 0x0f;
-    uint8_t p2 = (i >> 4) & 0x0f;
+    pixels[i] = (uint32_t)(((i >> 4) << 8) | (i & 0x0f));
 
-    pixels[i] = (p2 << 8) | p1;
-  }
+  // TMDS control character constants (negative polarity, per DVI spec)
+  const uint16_t b0 = 0b1101010100; // CTRL_00 (no sync)
+  const uint16_t b1 = 0b0010101011; // CTRL_01 (V sync)
+  const uint16_t b2 = 0b0101010100; // CTRL_10 (H sync)
+  const uint16_t b3 = 0b1010101011; // CTRL_11 (VH sync)
 
-  // TMDS control character constants
-  const uint16_t b0 = 0b1101010100;
-  const uint16_t b1 = 0b0010101011;
-  const uint16_t b2 = 0b0101010100;
-  const uint16_t b3 = 0b1010101011;
-
-  // sync palette entries (16 bytes each: norm_lo, norm_hi, norm_lo, norm_hi)
+  // sync palette entries (norm_lo, norm_hi, norm_lo, norm_hi — no inversion for sync)
   uint64_t sync_val;
   sync_val = get_ser_diff_data(b0, b0, b3);
   palette[NO_SYNC * 4 + 0] = (uint32_t)(sync_val);
@@ -348,9 +333,7 @@ void start_dvi()
   memset((uint8_t *)v_out_sync_vsync + video_mode.h_visible_area + video_mode.h_front_porch, VH_SYNC, video_mode.h_sync_pulse);
   memset((uint8_t *)v_out_sync_vsync + video_mode.h_visible_area + video_mode.h_front_porch + video_mode.h_sync_pulse, V_SYNC, video_mode.h_back_porch);
 
-  // Allocate ping-pong image line buffers as a single contiguous block so both
-  // buffers have identical SRAM bank access patterns (same alignment modulo 4),
-  // eliminating bus contention asymmetry between even and odd scanlines.
+  // Ping-pong image line buffers as a single contiguous block
   v_out_dma_buf_alloc = calloc(whole_line * 2, sizeof(uint8_t));
 
   if (!v_out_dma_buf_alloc)
@@ -407,6 +390,7 @@ void start_dvi()
 
   // ch0: data line → conv PIO TX (feeds index buffer to converter)
   dma_channel_config c0 = dma_channel_get_default_config(dma_ch0);
+
   channel_config_set_transfer_data_size(&c0, DMA_SIZE_32);
   channel_config_set_read_increment(&c0, true);
   channel_config_set_write_increment(&c0, false);
@@ -424,6 +408,7 @@ void start_dvi()
 
   // ch1: control — reloads ch0 read addr, fires IRQ
   dma_channel_config c1 = dma_channel_get_default_config(dma_ch1);
+
   channel_config_set_transfer_data_size(&c1, DMA_SIZE_32);
   channel_config_set_read_increment(&c1, false);
   channel_config_set_write_increment(&c1, false);
@@ -479,6 +464,7 @@ void start_dvi()
   irq_set_priority(DMA_IRQ_0, PICO_HIGHEST_IRQ_PRIORITY);
   irq_set_enabled(DMA_IRQ_0, true);
 
+  bus_ctrl_hw->priority = BUSCTRL_BUS_PRIORITY_DMA_W_BITS | BUSCTRL_BUS_PRIORITY_DMA_R_BITS;
   // start the line DMA (ch3↔ch2 loop is already running)
   dma_channel_start(dma_ch0);
 }

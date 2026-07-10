@@ -103,9 +103,6 @@ void print_video_out_menu()
     {
     case DVI:
         Serial.println("  2    720x576 @50Hz (div 2)");
-#ifdef USE_HSTX
-        Serial.println("  3    800x600 @75Hz (div 2)");
-#endif
         break;
 
     case VGA:
@@ -287,10 +284,6 @@ void print_video_out_mode()
 
     case MODE_800x600_60Hz:
         Serial.println("800x600 @60Hz");
-        break;
-
-    case MODE_800x600_75Hz:
-        Serial.println("800x600 @75Hz");
         break;
 
     case MODE_1024x768_60Hz_d3:
@@ -677,13 +670,7 @@ void handle_serial_menu()
                         settings.video_out_mode = MODE_1024x768_60Hz_d3;
                         print_video_out_mode();
                     }
-#ifdef USE_HSTX
-                    else
-                    {
-                        settings.video_out_mode = MODE_800x600_75Hz;
-                        print_video_out_mode();
-                    }
-#endif
+
                     break;
 
                 case '4':
@@ -1471,7 +1458,9 @@ void handle_serial_menu()
 
         case 'w':
             Serial.println("  Saving settings...");
+            stop_video_output();
             save_settings(&settings);
+            start_video_output(active_video_output);
             inchar = 0;
             break;
 

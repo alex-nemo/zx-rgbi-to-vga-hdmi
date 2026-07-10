@@ -12,11 +12,11 @@ jobs:
       matrix:
         board:
           - 36LJU22
-          - RP2040_ZERO
           - 38LJE24
-          - 38LJE24-PICO2
+          # - 38LJE24-PICO2
           - 38LJU24
-          - 38LJU24-PICO2
+          # - 38LJU24-PICO2
+          - RP2040_ZERO
           # - 11XGA24_1
           # - 11XGA24_2
           - LEO_V2

@@ -57,11 +57,11 @@ That companion firmware version:
   - Supports both native FF protocol and HD44780-compatible LCD emulation.
   - Runtime enable/disable and protocol switching are available from OSD and serial menus.
   - See [FF OSD Guide](docs/FF_OSD_GUIDE.md) for wiring and configuration details.
-- **Hardware Configuration (LEO V2 / LEO V3):**
-  - ROM bank selection (1–8) — on LEO V3, value applied on next RESET (F12); on LEO V2 (no keyboard), applied only after a full power cycle.
+- **Hardware Configuration for LEO V3 boards:**
+  - Configured via OSD **HARDWARE CONFIG** submenu; saved to flash with SAVE.
+  - ROM bank selection (1–8) — value applied on next RESET (F12)
   - RAM size toggle (128 KB / 1024 KB) — applied immediately via GPIO.
   - Gotek drive selector (OFF / A / B) — applied immediately via GPIO.
-  - Configured via OSD **HARDWARE CONFIG** submenu; saved to flash with SAVE.
 - **Configuration via Serial Terminal:**
   - Alternative text-based menu system for headless configuration.
   - Frequency presets for self-synchronizing capture mode (ZX Spectrum 48K/128K pixel clocks).
